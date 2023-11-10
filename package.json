@@ -6,8 +6,14 @@
   "engines": {
     "vscode": "^1.84.0"
   },
+  "repository": {
+    "url": "https://github.com/joyceerhl/vscode-gptheme"
+  },
   "categories": [
     "Other"
+  ],
+  "extensionDependencies": [
+    "github.copilot-chat"
   ],
   "activationEvents": [
     "onStartupFinished"
