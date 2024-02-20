@@ -11,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('gptheme.applyTheme', (args: unknown) => {
 			const colorSet = Array.isArray(args) ? (args[0] as IColorSet) : args as IColorSet;
 			generateTheme('GPTheme', colorSet, path.join(__dirname, '../theme.json'));
-			vscode.commands.executeCommand('workbench.action.reloadWindow');
+			vscode.workspace.getConfiguration().update('workbench.colorTheme', 'GPTheme', vscode.ConfigurationTarget.Global);
 		})
 	);
 
@@ -43,7 +43,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		const colorSet = { base: fixedParsed };
 
-		response.button({ title: 'Generate and Reload to Apply Theme', command: 'gptheme.applyTheme', arguments: [colorSet] });
+		response.button({ title: 'Generate and Apply Theme', command: 'gptheme.applyTheme', arguments: [colorSet] });
 
 		return {};
 	});
@@ -71,7 +71,7 @@ const tokenNames = [
 function generateSystemPrompt() {
 	return `
 You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
-Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens. Return the theme as a JSON object where the keys are the tokens, and the values are colors in hexadecimal format. The colors should look good together and have good color contrast.
+Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens. Return the theme as a JSON object where the keys are the tokens, and the values are colors in hexadecimal format. The colors should look good together and have good color contrast. Wrap the JSON object in a Markdown codeblock.
 Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
 }
 

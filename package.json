@@ -27,7 +27,7 @@
     "themes":[
       {
         "label": "GPTheme",
-        "id": "aitheme",
+        "id": "GPTheme",
         "uiTheme": "vs-dark",
         "path": "./theme.json"
       }
