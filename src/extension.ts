@@ -1,30 +1,38 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import { generateTheme } from 'vscode-theme-generator';
+import { IColorSet, generateTheme } from 'vscode-theme-generator';
 import * as vscode from 'vscode';
 import * as path from 'path';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	const agent = vscode.chat.createChatAgent('gptheme', async (request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken) => {
-		const chatAccess = await vscode.chat.requestChatAccess('copilot');
-		const chatRequest = chatAccess.makeRequest([
-			{ role: vscode.ChatMessageRole.System, content: generateSystemPrompt()},
-			{ role: vscode.ChatMessageRole.User, content: 'Generating theme...'},
-			{ role: vscode.ChatMessageRole.User, content: generateUserPrompt(request.prompt)},
+	context.subscriptions.push(
+		vscode.commands.registerCommand('gptheme.applyTheme', (args: unknown) => {
+			const colorSet = Array.isArray(args) ? (args[0] as IColorSet) : args as IColorSet;
+			generateTheme('GPTheme', colorSet, path.join(__dirname, '../theme.json'));
+			vscode.commands.executeCommand('workbench.action.reloadWindow');
+		})
+	);
+
+	const agent = vscode.chat.createChatParticipant('gptheme', async (request: vscode.ChatRequest, context: vscode.ChatContext, response: vscode.ChatResponseStream, token: vscode.CancellationToken) => {
+		const chatAccess = await vscode.lm.requestLanguageModelAccess('copilot-gpt-4');
+		const chatRequest = chatAccess.makeChatRequest([
+			new vscode.LanguageModelSystemMessage(generateSystemPrompt()),
+			new vscode.LanguageModelUserMessage('Generating theme...'),
+			new vscode.LanguageModelUserMessage(generateUserPrompt(request.prompt)),
 		], {}, token);
 		let data = '';
-		for await (const part of chatRequest.response) {
+		for await (const part of chatRequest.stream) {
 			data += part;
-			progress.report({ content: part });
+			response.markdown(part);
 		}
 
 		const regex = /```(json)?\n([\s\S]*?)\n?```/g;
 		const match = regex.exec(data);
 		const json = match ? match[2] : '';
 		if (!json) {
-			return { errorDetails: { message: 'Sorry, please try asking your question again.'} };
+			return { errorDetails: { message: 'Sorry, please try asking your question again.' } };
 		}
 
 		const parsed = JSON.parse(json);
@@ -34,17 +42,17 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		const colorSet = { base: fixedParsed };
-		generateTheme('GPTheme', colorSet, path.join(__dirname, '../theme.json'));
+
+		response.button({ title: 'Generate and Reload to Apply Theme', command: 'gptheme.applyTheme', arguments: [colorSet] });
+
 		return {};
 	});
 
 	agent.description = 'Generate a VS Code theme from natural language';
 	agent.fullName = 'Theme Generator';
 	agent.followupProvider = {
-		provideFollowups: (result: vscode.ChatAgentResult2, token: vscode.CancellationToken) => {
-			if (!result.errorDetails) {
-				return [{ message: 'Change Theme', command: 'workbench.action.selectTheme' }];
-			}
+		provideFollowups: (result: vscode.ChatResult, token: vscode.CancellationToken) => {
+			return [{ prompt: 'Regenerate theme' }];
 		}
 	};
 
@@ -68,14 +76,14 @@ Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
 }
 
 function generateUserPrompt(inputText: string) {
-return `
+	return `
 Text: ${inputText}
 Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
 }
 
 function compareHexColors(hex1: string, hex2: string) {
-    return parseInt(hex1.replace('#', ''), 16) - parseInt(hex2.replace('#', ''), 16);
+	return parseInt(hex1.replace('#', ''), 16) - parseInt(hex2.replace('#', ''), 16);
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }

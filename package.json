@@ -20,11 +20,8 @@
   ],
   "main": "./dist/extension.js",
   "enabledApiProposals": [
-    "chatRequestAccess",
-    "chatAgents",
-    "chatAgents2",
-    "chatVariables",
-    "chat"
+    "chatParticipant",
+    "languageModels"
   ],
   "contributes": {
     "themes":[
