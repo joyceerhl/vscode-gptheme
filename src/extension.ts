@@ -16,12 +16,11 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	const agent = vscode.chat.createChatParticipant('gptheme', async (request: vscode.ChatRequest, context: vscode.ChatContext, response: vscode.ChatResponseStream, token: vscode.CancellationToken) => {
-		const chatAccess = await vscode.lm.requestLanguageModelAccess('copilot-gpt-4');
-		const chatRequest = chatAccess.makeChatRequest([
-			new vscode.LanguageModelSystemMessage(generateSystemPrompt()),
-			new vscode.LanguageModelUserMessage('Generating theme...'),
-			new vscode.LanguageModelUserMessage(generateUserPrompt(request.prompt)),
-		], {}, token);
+		const messages = [
+			new vscode.LanguageModelChatSystemMessage(generateSystemPrompt()),
+			new vscode.LanguageModelChatUserMessage(generateUserPrompt(request.prompt)),
+		];
+		const chatRequest = await vscode.lm.sendChatRequest('copilot-gpt-4', messages, {}, token);
 		let data = '';
 		for await (const part of chatRequest.stream) {
 			data += part;
@@ -48,11 +47,9 @@ export function activate(context: vscode.ExtensionContext) {
 		return {};
 	});
 
-	agent.description = 'Generate a VS Code theme from natural language';
-	agent.fullName = 'Theme Generator';
 	agent.followupProvider = {
 		provideFollowups: (result: vscode.ChatResult, token: vscode.CancellationToken) => {
-			return [{ prompt: 'Regenerate theme' }];
+			return [];
 		}
 	};
 
@@ -71,7 +68,8 @@ const tokenNames = [
 function generateSystemPrompt() {
 	return `
 You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
-Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens. Return the theme as a JSON object where the keys are the tokens, and the values are colors in hexadecimal format. The colors should look good together and have good color contrast. Wrap the JSON object in a Markdown codeblock.
+Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens.
+Provide an explanation for the color palette that you chose, then return the theme as a JSON object where the keys are the tokens, and the values are colors in hexadecimal format. The colors should look good together and have good color contrast. Wrap the JSON object in a Markdown codeblock.
 Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
 }
 

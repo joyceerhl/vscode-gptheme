@@ -24,6 +24,12 @@
     "languageModels"
   ],
   "contributes": {
+    "chatParticipants": [
+      {
+        "name": "gptheme",
+        "description": "Generate VS Code themes from natural language"
+      }
+    ],
     "themes":[
       {
         "label": "GPTheme",
