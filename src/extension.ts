@@ -17,14 +17,19 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const agent = vscode.chat.createChatParticipant('gptheme', async (request: vscode.ChatRequest, context: vscode.ChatContext, response: vscode.ChatResponseStream, token: vscode.CancellationToken) => {
 		const messages = [
-			new vscode.LanguageModelChatSystemMessage(generateSystemPrompt()),
-			new vscode.LanguageModelChatUserMessage(generateUserPrompt(request.prompt)),
+			vscode.LanguageModelChatMessage.User(generateSystemPrompt()),
+			vscode.LanguageModelChatMessage.User(generateUserPrompt(request.prompt)),
 		];
-		const chatRequest = await vscode.lm.sendChatRequest('copilot-gpt-4', messages, {}, token);
+		const [model] = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+		if (!model) {
+			throw new Error('No model found');
+		}
+
 		let data = '';
-		for await (const part of chatRequest.stream) {
-			data += part;
-			response.markdown(part);
+		const chatResponse = await model.sendRequest(messages, {}, token);
+		for await (const fragment of chatResponse.text) {
+			data += fragment;
+			response.markdown(fragment);
 		}
 
 		const regex = /```(json)?\n([\s\S]*?)\n?```/g;
@@ -46,12 +51,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 		return {};
 	});
-
-	agent.followupProvider = {
-		provideFollowups: (result: vscode.ChatResult, token: vscode.CancellationToken) => {
-			return [];
-		}
-	};
 
 	context.subscriptions.push(agent);
 }
