@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
 				return acc;
 			}, {} as Record<string, string>);
 		let fixedParsed = parsed;
-		if (compareHexColors(parsed['foreground'], parsed['background']) < 0) {
+		if ('foreground' in parsed && 'background' in parsed && compareHexColors(parsed['foreground'], parsed['background']) < 0) {
 			fixedParsed = { ...parsed, ...{ foreground: parsed['background'], background: parsed['foreground'] } };
 		}
 
