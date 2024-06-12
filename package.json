@@ -16,9 +16,7 @@
   "extensionDependencies": [
     "github.copilot-chat"
   ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "chatParticipants": [
