@@ -68,7 +68,9 @@ function generateSystemPrompt() {
 	return `
 You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
 Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens.
-Provide an explanation for the color palette that you chose, then return the theme as a JSON object where the keys are the tokens, and the values are colors in hexadecimal format. The colors should look good together and have good color contrast. Wrap the JSON object in a Markdown codeblock.
+Provide an explanation for the color palette that you chose, then return the theme as a JSON object where the keys are the tokens, and the values are colors in hexadecimal format. The colors should look good together and have good color contrast.
+Wrap the JSON object in a Markdown codeblock.
+Do not include comments in the JSON object.
 Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
 }
 
