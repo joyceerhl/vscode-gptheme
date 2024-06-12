@@ -75,11 +75,15 @@ const tokenNames = [
 ];
 
 function generateSystemPrompt() {
+	// The #000000 note is because vscode-theme-generator tries to lighten colors to generate other colors, and it does this in a naive way that doesn't work on black.
 	return `
 You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
 Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens.
-Provide an explanation for the color palette that you chose, then return the theme as a CSS rules where the token names are properties (which don't really exist in CSS), and the values are colors in hexadecimal format. You can only use one rule and hex-format colors, no other CSS features. The colors should look good together and have good color contrast. Wrap the CSS in a triple-backtick markdown codeblock.
-Do not include comments in the CSS rule.
+First, think of a colorful scene that could be evoked by the user's prompt. Briefly describe this scene and some of the colors in it. Only use natural language in this step, no hexadecimal colors.
+Then, return the theme as a CSS rule where the token names are properties (which don't really exist in CSS), and the values are colors in hexadecimal format. You can only use one rule and hex-format colors, no other CSS features. Wrap the CSS in a triple-backtick markdown codeblock. Do not include comments in the CSS rule.
+This is a dark theme- the background color should be darker than the other colors.
+The colors should look good together and have good color contrast.
+Don't repeat the same color multiple times. Never use full black (#000000).
 Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}
 
 CSS output example:
