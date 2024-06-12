@@ -32,14 +32,24 @@ export function activate(context: vscode.ExtensionContext) {
 			response.markdown(fragment);
 		}
 
-		const regex = /```(json)?\n([\s\S]*?)\n?```/g;
+		const regex = /```(css)?\n([\s\S]*?)\n?```/gi;
 		const match = regex.exec(data);
-		const json = match ? match[2] : '';
-		if (!json) {
+		const css = match ? match[2] : '';
+		if (!css) {
 			return { errorDetails: { message: 'Sorry, please try asking your question again.' } };
 		}
 
-		const parsed = JSON.parse(json);
+		const parsed = css.trim().split('\n')
+			.slice(1, -1) // Strip the first and lines lines of the CSS rule
+			.map(line => {
+				return line.trim()
+				.replace(/;$/, '')
+				.split(/:\s*/);
+			})
+			.reduce((acc, [key, value]) => {
+				acc[key] = value;
+				return acc;
+			}, {} as Record<string, string>);
 		let fixedParsed = parsed;
 		if (compareHexColors(parsed['foreground'], parsed['background']) < 0) {
 			fixedParsed = { ...parsed, ...{ foreground: parsed['background'], background: parsed['foreground'] } };
@@ -68,10 +78,22 @@ function generateSystemPrompt() {
 	return `
 You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
 Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens.
-Provide an explanation for the color palette that you chose, then return the theme as a JSON object where the keys are the tokens, and the values are colors in hexadecimal format. The colors should look good together and have good color contrast.
-Wrap the JSON object in a Markdown codeblock.
-Do not include comments in the JSON object.
-Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
+Provide an explanation for the color palette that you chose, then return the theme as a CSS rules where the token names are properties (which don't really exist in CSS), and the values are colors in hexadecimal format. You can only use one rule and hex-format colors, no other CSS features. The colors should look good together and have good color contrast. Wrap the CSS in a triple-backtick markdown codeblock.
+Do not include comments in the CSS rule.
+Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}
+
+CSS output example:
+\`\`\`css
+.theme {
+	background: #353535;
+	foreground: #FFFFFF;
+	color1: #F52940;
+	color2: #3D9CF5;
+	color3: #9CDE38;
+	color4: #FF9636;
+}
+\`\`\`
+`;
 }
 
 function generateUserPrompt(inputText: string) {
