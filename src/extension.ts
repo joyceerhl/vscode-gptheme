@@ -3,10 +3,25 @@
 import { IColorSet, generateTheme } from 'vscode-theme-generator';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { SpotifyAuthProvider, UpdateableAuthenticationSession } from './spotify';
+import { BetterTokenStorage } from './betterSecretStorage';
+import { SpotifyUriHandler } from './uriHandler';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+
+	const uriHandler = new SpotifyUriHandler();
+	context.subscriptions.push(uriHandler);
+	const tokenStorage = new BetterTokenStorage<UpdateableAuthenticationSession>(context.extension.id, context);
+	const authProvider = new SpotifyAuthProvider(uriHandler, tokenStorage);
+	context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider(
+		SpotifyAuthProvider.id,
+		SpotifyAuthProvider.label,
+		authProvider
+	));
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand('gptheme.applyTheme', (args: unknown) => {
 			const colorSet = Array.isArray(args) ? (args[0] as IColorSet) : args as IColorSet;
@@ -16,10 +31,24 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	const agent = vscode.chat.createChatParticipant('gptheme', async (request: vscode.ChatRequest, context: vscode.ChatContext, response: vscode.ChatResponseStream, token: vscode.CancellationToken) => {
+		const additionalContext: string[] = [];
+
+		switch (request.command) {
+			case 'spotify': {
+				const client = await authProvider.getSpotifyClient();
+				const state = await client.player.getPlaybackState();
+				if ('album' in state.item) {
+					additionalContext.push(`I'm currently playing the following song: ${state.item.name} by ${state.item.artists[0].name}. Please use this as inspiration when generating a theme.`);
+				}
+				break;
+			}
+		}
+
 		const messages = [
 			vscode.LanguageModelChatMessage.User(generateSystemPrompt()),
-			vscode.LanguageModelChatMessage.User(generateUserPrompt(request.prompt)),
+			vscode.LanguageModelChatMessage.User(generateUserPrompt(request.prompt, additionalContext)),
 		];
+
 		const [model] = await vscode.lm.selectChatModels({ vendor: 'copilot' });
 		if (!model) {
 			throw new Error('No model found');
@@ -74,10 +103,11 @@ Do not include comments in the JSON object.
 Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
 }
 
-function generateUserPrompt(inputText: string) {
+function generateUserPrompt(inputText: string, additionalContext: string[]) {
 	return `
 Text: ${inputText}
-Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
+Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}
+${additionalContext.join('\n')}`;
 }
 
 function compareHexColors(hex1: string, hex2: string) {
