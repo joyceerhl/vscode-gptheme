@@ -22,7 +22,13 @@
       {
         "id": "gptheme",
         "name": "GPTheme",
-        "description": "Generate VS Code themes from natural language 🤯"
+        "description": "Generate VS Code themes from natural language 🤯",
+        "commands": [
+          {
+            "name": "random",
+            "description": "Generate a theme based on a random prompt"
+          }
+        ]
       }
     ],
     "themes": [

@@ -40,11 +40,18 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	const agent = vscode.chat.createChatParticipant('gptheme', async (request: vscode.ChatRequest, context: vscode.ChatContext, response: vscode.ChatResponseStream, token: vscode.CancellationToken) => {
+		let prompt = request.prompt;
+		if (request.command === 'random') {
+			prompt = await randomPrompt(token);
+			response.markdown(`Prompt: "${prompt}"\n\n`);
+		}
+		
 		const messages = [
 			vscode.LanguageModelChatMessage.User(generateSystemPrompt()),
-			vscode.LanguageModelChatMessage.User(generateUserPrompt(request.prompt)),
+			vscode.LanguageModelChatMessage.User(prompt),
 		];
-		const [model] = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+		const models = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-4' });
+		const [model] = models;
 		if (!model) {
 			throw new Error('No model found');
 		}
@@ -100,8 +107,7 @@ const tokenNames = [
 
 function generateSystemPrompt() {
 	// The #000000 note is because vscode-theme-generator tries to lighten colors to generate other colors, and it does this in a naive way that doesn't work on black.
-	return `
-You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
+	return `You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
 Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens.
 First, think of a colorful scene that could be evoked by the user's prompt. Briefly describe this scene and some of the colors in it. Only use natural language in this step, no hexadecimal colors.
 Then, return the theme as a CSS rule where the token names are properties (which don't really exist in CSS), and the values are colors in hexadecimal format. You can only use one rule and hex-format colors, no other CSS features. Wrap the CSS in a triple-backtick markdown codeblock. Do not include comments in the CSS rule.
@@ -124,14 +130,47 @@ CSS output example:
 `;
 }
 
-function generateUserPrompt(inputText: string) {
-	return `
-Text: ${inputText}
-Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}`;
-}
-
 function compareHexColors(hex1: string, hex2: string) {
 	return parseInt(hex1.replace('#', ''), 16) - parseInt(hex2.replace('#', ''), 16);
+}
+
+function pickRandom<T>(list: T[]): T {
+	return list[Math.floor(Math.random() * list.length)];
+}
+
+const randomPromptThemes = [
+	'nature',
+	'beauty',
+	'art',
+	'technology',
+	'sports',
+	'movies',
+	'music',
+	'magic',
+	'bikes',
+	'code',
+	'food',
+	'cities',
+	''
+]
+
+async function randomPrompt(token: vscode.CancellationToken): Promise<string> {
+	let [model] = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-3.5-turbo' });
+	if (!model) {
+		[model] = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+	}
+
+	const target = pickRandom(['place', 'object', 'scene']);
+	const theme = pickRandom(randomPromptThemes);
+	const themePart = theme ? `Your selection can be related to "${theme}".` : '';
+	const prompt = `You are assisting a software engineer. Your task is to imagine and describe a random ${target}, which a designer will use as inspiration. ${themePart} Reply with a very brief and direct one-sentence description of the ${target}. Not too much detail. No unnecessary adjectives.`;
+	const chatResponse = await model.sendRequest([vscode.LanguageModelChatMessage.User(prompt)], {}, token);
+	let data = '';
+	for await (const fragment of chatResponse.text) {
+		data += fragment;
+	}
+
+	return data;
 }
 
 // This method is called when your extension is deactivated
