@@ -8,10 +8,34 @@ import * as path from 'path';
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
-		vscode.commands.registerCommand('gptheme.applyTheme', (args: unknown) => {
+		vscode.commands.registerCommand('gptheme.applyTheme', async (args: unknown) => {
 			const colorSet = Array.isArray(args) ? (args[0] as IColorSet) : args as IColorSet;
-			generateTheme('GPTheme', colorSet, path.join(__dirname, '../theme.json'));
-			vscode.workspace.getConfiguration().update('workbench.colorTheme', 'GPTheme', vscode.ConfigurationTarget.Global);
+			const themeFile = path.join(__dirname, '../theme.json');
+			const previousThemeContents = await vscode.workspace.fs.readFile(vscode.Uri.file(themeFile));
+			generateTheme('GPTheme', colorSet, themeFile);
+
+			const config = vscode.workspace.getConfiguration();
+			const settingName = 'workbench.colorTheme';
+			const previousTheme = config.get<string>(settingName);
+
+			// Hack: Clear the theme first to ensure the new theme is applied
+			const setTheme = async () => {
+				await config.update(settingName, undefined, vscode.ConfigurationTarget.Global);
+				await config.update(settingName, 'GPTheme', vscode.ConfigurationTarget.Global);
+			};
+			await setTheme();
+
+			vscode.window.showInformationMessage('Would you like to revert to your previous theme?', 'Yes', 'No')
+				.then(async (value) => {
+					if (value === 'Yes') {
+						if (previousTheme !== 'GPTheme') {
+							await config.update(settingName, previousTheme, vscode.ConfigurationTarget.Global);
+						} else {
+							await vscode.workspace.fs.writeFile(vscode.Uri.file(themeFile), previousThemeContents);
+							await setTheme();
+						}
+					}
+				});
 		})
 	);
 
