@@ -3,10 +3,20 @@
 import { IColorSet, generateTheme } from 'vscode-theme-generator';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { SpotifyAuthProvider } from './spotify';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
+
+	const authProvider = new SpotifyAuthProvider(context.secrets);
+	await authProvider.initialize();
+	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider(
+		SpotifyAuthProvider.id,
+		SpotifyAuthProvider.label,
+		authProvider
+	));
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand('gptheme.applyTheme', async (args: unknown) => {
 			const colorSet = Array.isArray(args) ? (args[0] as IColorSet) : args as IColorSet;
@@ -40,18 +50,37 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	const agent = vscode.chat.createChatParticipant('gptheme', async (request: vscode.ChatRequest, context: vscode.ChatContext, response: vscode.ChatResponseStream, token: vscode.CancellationToken) => {
+		const additionalContext: string[] = [];
 		let prompt = request.prompt;
-		if (request.command === 'random') {
-			prompt = await randomPrompt(token);
-			response.markdown(`Prompt: "${prompt}"\n\n`);
+
+		switch (request.command) {
+			case 'spotify': {
+				const client = await authProvider.getSpotifyClient();
+				const state = await client.player.getPlaybackState();
+				let track = state?.item;
+				if (!track) {
+					const tracks = await client.player.getRecentlyPlayedTracks();
+					track = tracks.items[0].track;
+				}
+				if ('album' in track) {
+					response.progress(`Generating theme for "${track.name}" by ${track.artists[0].name}...`);
+					prompt += `\nI'm currently playing the following song: ${track.name} by ${track.artists[0].name}. Please use this as inspiration when generating a theme.`;
+				}
+				break;
+			}
+			case 'random':
+				prompt = await randomPrompt(token);
+				response.markdown(`Prompt: "${prompt}"\n\n`);
+				break;
 		}
-		
+
 		const messages = [
 			vscode.LanguageModelChatMessage.User(generateSystemPrompt()),
 			vscode.LanguageModelChatMessage.User(prompt),
 		];
+
 		const models = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-4' });
-		const [model] = models;
+		const model = models[0];
 		if (!model) {
 			throw new Error('No model found');
 		}
@@ -74,8 +103,8 @@ export function activate(context: vscode.ExtensionContext) {
 			.slice(1, -1) // Strip the first and lines lines of the CSS rule
 			.map(line => {
 				return line.trim()
-				.replace(/;$/, '')
-				.split(/:\s*/);
+					.replace(/;$/, '')
+					.split(/:\s*/);
 			})
 			.reduce((acc, [key, value]) => {
 				acc[key] = value;
