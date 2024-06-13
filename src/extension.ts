@@ -3,19 +3,14 @@
 import { IColorSet, generateTheme } from 'vscode-theme-generator';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { SpotifyAuthProvider, UpdateableAuthenticationSession } from './spotify';
-import { BetterTokenStorage } from './betterSecretStorage';
-import { SpotifyUriHandler } from './uriHandler';
+import { SpotifyAuthProvider } from './spotify';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 
-	const uriHandler = new SpotifyUriHandler();
-	context.subscriptions.push(uriHandler);
-	const tokenStorage = new BetterTokenStorage<UpdateableAuthenticationSession>(context.extension.id, context);
-	const authProvider = new SpotifyAuthProvider(uriHandler, tokenStorage);
-	context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+	const authProvider = new SpotifyAuthProvider(context.secrets);
+	await authProvider.initialize();
 	context.subscriptions.push(vscode.authentication.registerAuthenticationProvider(
 		SpotifyAuthProvider.id,
 		SpotifyAuthProvider.label,
@@ -56,24 +51,36 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const agent = vscode.chat.createChatParticipant('gptheme', async (request: vscode.ChatRequest, context: vscode.ChatContext, response: vscode.ChatResponseStream, token: vscode.CancellationToken) => {
 		const additionalContext: string[] = [];
+		let prompt = request.prompt;
 
 		switch (request.command) {
 			case 'spotify': {
 				const client = await authProvider.getSpotifyClient();
 				const state = await client.player.getPlaybackState();
-				if ('album' in state.item) {
-					additionalContext.push(`I'm currently playing the following song: ${state.item.name} by ${state.item.artists[0].name}. Please use this as inspiration when generating a theme.`);
+				let track = state?.item;
+				if (!track) {
+					const tracks = await client.player.getRecentlyPlayedTracks();
+					track = tracks.items[0].track;
+				}
+				if ('album' in track) {
+					response.progress(`Generating theme for "${track.name}" by ${track.artists[0].name}...`);
+					prompt += `\nI'm currently playing the following song: ${track.name} by ${track.artists[0].name}. Please use this as inspiration when generating a theme.`;
 				}
 				break;
 			}
+			case 'random':
+				prompt = await randomPrompt(token);
+				response.markdown(`Prompt: "${prompt}"\n\n`);
+				break;
 		}
 
 		const messages = [
 			vscode.LanguageModelChatMessage.User(generateSystemPrompt()),
-			vscode.LanguageModelChatMessage.User(generateUserPrompt(request.prompt, additionalContext)),
+			vscode.LanguageModelChatMessage.User(prompt),
 		];
 
-		const [model] = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+		const models = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-4' });
+		const model = models[0];
 		if (!model) {
 			throw new Error('No model found');
 		}
@@ -96,8 +103,8 @@ export function activate(context: vscode.ExtensionContext) {
 			.slice(1, -1) // Strip the first and lines lines of the CSS rule
 			.map(line => {
 				return line.trim()
-				.replace(/;$/, '')
-				.split(/:\s*/);
+					.replace(/;$/, '')
+					.split(/:\s*/);
 			})
 			.reduce((acc, [key, value]) => {
 				acc[key] = value;
@@ -114,6 +121,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		return {};
 	});
+	agent.iconPath = new vscode.ThemeIcon('paintcan');
 
 	context.subscriptions.push(agent);
 }
@@ -129,8 +137,7 @@ const tokenNames = [
 
 function generateSystemPrompt() {
 	// The #000000 note is because vscode-theme-generator tries to lighten colors to generate other colors, and it does this in a naive way that doesn't work on black.
-	return `
-You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
+	return `You are an expert theme designer who is excellent at choosing unique and harmonious color palettes.
 Generate a color palette of unique colors for a VS Code theme inspired by the user's text provided below for the following tokens.
 First, think of a colorful scene that could be evoked by the user's prompt. Briefly describe this scene and some of the colors in it. Only use natural language in this step, no hexadecimal colors.
 Then, return the theme as a CSS rule where the token names are properties (which don't really exist in CSS), and the values are colors in hexadecimal format. You can only use one rule and hex-format colors, no other CSS features. Wrap the CSS in a triple-backtick markdown codeblock. Do not include comments in the CSS rule.
@@ -153,15 +160,47 @@ CSS output example:
 `;
 }
 
-function generateUserPrompt(inputText: string, additionalContext: string[]) {
-	return `
-Text: ${inputText}
-Tokens: ${tokenNames.map((token) => '"' + token + '"').join(",\n")}
-${additionalContext.join('\n')}`;
-}
-
 function compareHexColors(hex1: string, hex2: string) {
 	return parseInt(hex1.replace('#', ''), 16) - parseInt(hex2.replace('#', ''), 16);
+}
+
+function pickRandom<T>(list: T[]): T {
+	return list[Math.floor(Math.random() * list.length)];
+}
+
+const randomPromptThemes = [
+	'nature',
+	'beauty',
+	'art',
+	'technology',
+	'sports',
+	'movies',
+	'music',
+	'magic',
+	'bikes',
+	'code',
+	'food',
+	'cities',
+	''
+];
+
+async function randomPrompt(token: vscode.CancellationToken): Promise<string> {
+	let [model] = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-3.5-turbo' });
+	if (!model) {
+		[model] = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+	}
+
+	const target = pickRandom(['place', 'object', 'scene']);
+	const theme = pickRandom(randomPromptThemes);
+	const themePart = theme ? `Your selection can be related to "${theme}".` : '';
+	const prompt = `You are assisting a software engineer. Your task is to imagine and describe a random ${target}, which a designer will use as inspiration. ${themePart} Reply with a very brief and direct one-sentence description of the ${target}. Not too much detail. No unnecessary adjectives.`;
+	const chatResponse = await model.sendRequest([vscode.LanguageModelChatMessage.User(prompt)], {}, token);
+	let data = '';
+	for await (const fragment of chatResponse.text) {
+		data += fragment;
+	}
+
+	return data;
 }
 
 // This method is called when your extension is deactivated
