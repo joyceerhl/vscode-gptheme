@@ -92,6 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 		return {};
 	});
+	agent.iconPath = new vscode.ThemeIcon('paintcan');
 
 	context.subscriptions.push(agent);
 }
@@ -152,7 +153,7 @@ const randomPromptThemes = [
 	'food',
 	'cities',
 	''
-]
+];
 
 async function randomPrompt(token: vscode.CancellationToken): Promise<string> {
 	let [model] = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-3.5-turbo' });
