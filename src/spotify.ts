@@ -59,7 +59,7 @@ export class SpotifyAuthProvider extends Disposable implements AuthenticationPro
 
     //#region AuthenticationProvider implementation
 
-    getSessions(scopes?: readonly string[]): Thenable<readonly AuthenticationSession[]> {
+    getSessions(scopes?: readonly string[]): Thenable<AuthenticationSession[]> {
         return Promise.resolve(this._sessions
             .filter(session => !scopes || scopes.every(scope => session.scopes.includes(scope)))
             .map(s => ({

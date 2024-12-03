@@ -4,6 +4,7 @@ import { IColorSet, generateTheme } from 'vscode-theme-generator';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { SpotifyAuthProvider } from './spotify';
+import { sendChatParticipantRequest  } from '@vscode/chat-extension-utils';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -74,22 +75,16 @@ export async function activate(context: vscode.ExtensionContext) {
 				break;
 		}
 
-		const messages = [
-			vscode.LanguageModelChatMessage.User(generateSystemPrompt()),
-			vscode.LanguageModelChatMessage.User(prompt),
-		];
 
-		const models = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-4' });
-		const model = models[0];
-		if (!model) {
-			throw new Error('No model found');
-		}
+		const result = sendChatParticipantRequest(request, context,{ prompt: `${generateSystemPrompt()}\n${prompt}`}, token);
+
 
 		let data = '';
-		const chatResponse = await model.sendRequest(messages, {}, token);
-		for await (const fragment of chatResponse.text) {
-			data += fragment;
-			response.markdown(fragment);
+		for await (const fragment of result.stream) {
+			if (fragment instanceof vscode.LanguageModelTextPart) {
+				data += fragment.value;
+				response.markdown(fragment.value);
+			}
 		}
 
 		const regex = /```(css)?\n([\s\S]*?)\n?```/gi;

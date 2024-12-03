@@ -27,9 +27,9 @@
         "description": "Generate VS Code themes from natural language 🤯",
         "commands": [
           {
-						"name": "spotify",
-						"description": "Generate a theme from your currently playing Spotify song"
-					},
+            "name": "spotify",
+            "description": "Generate a theme from your currently playing Spotify song"
+          },
           {
             "name": "random",
             "description": "Generate a theme based on a random prompt"
@@ -59,13 +59,14 @@
     "update-proposed-api": "vscode-dts dev"
   },
   "dependencies": {
-    "vscode-theme-generator": "^0.2.1",
-    "@spotify/web-api-ts-sdk": "^1.2.0"
+    "@spotify/web-api-ts-sdk": "^1.2.0",
+    "@vscode/chat-extension-utils": "^0.0.0-alpha.4",
+    "vscode-theme-generator": "^0.2.1"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.3",
     "@types/node": "18.x",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "^1.95.0",
     "@typescript-eslint/eslint-plugin": "^6.9.0",
     "@typescript-eslint/parser": "^6.9.0",
     "@vscode/test-electron": "^2.3.6",
